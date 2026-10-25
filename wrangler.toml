@@ -1,4 +1,4 @@
-name = "decap-cms-github-oauth-api"
+name = "dogi-coffee-oauth"
 main = "index.ts"
 
 compatibility_date = "2023-11-11"

@@ -3,5 +3,5 @@ main = "index.ts"
 
 compatibility_date = "2023-11-11"
 
-account_id = "d7c94f1ff328bd82a4a19d2133b2cacf"
+account_id = "c192ee4c911d964935f8f53ac8399ae9"
 workers_dev = true

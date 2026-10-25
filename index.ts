@@ -1,32 +1,38 @@
+
 import decapCMSLoginScript from './decap-cms-login-script';
 
-addEventListener('fetch', (event: any) => {
-  event.respondWith(handle(event.request));
-});
-
-// Inserted as secrets to the worker
-// @ts-ignore
-const client_id = CLIENT_ID;
-// @ts-ignore
-const client_secret = CLIENT_SECRET;
-
-async function handle(request: Request) {
-  const { pathname, searchParams: params } = new URL(request.url);
-
-  switch (pathname) {
-    case '/auth':
-      return redirectToAuthFlow();
-
-    case '/callback':
-      return await fetchAccessToken(params);
-  }
-
-  return new Response();
+interface Env {
+  CLIENT_ID: string;
+  CLIENT_SECRET: string;
 }
 
-async function fetchAccessToken(requestParams: URLSearchParams) {
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const { pathname, searchParams } = new URL(request.url);
+
+    switch (pathname) {
+      case '/auth':
+        return redirectToAuthFlow(env);
+
+      case '/callback':
+        return await fetchAccessToken(searchParams, env);
+
+      default:
+        return new Response('Not found', { status: 404 });
+    }
+  },
+};
+
+async function fetchAccessToken(
+  params: URLSearchParams,
+  env: Env
+): Promise<Response> {
   try {
-    const code = requestParams.get('code');
+    const code = params.get('code');
+
+    if (!code) {
+      return new Response('Missing OAuth code', { status: 400 });
+    }
 
     const response = await fetch(
       'https://github.com/login/oauth/access_token',
@@ -37,13 +43,27 @@ async function fetchAccessToken(requestParams: URLSearchParams) {
           'user-agent': 'decap-cms-github-oauth-api-cloudflare',
           accept: 'application/json',
         },
-        body: JSON.stringify({ client_id, client_secret, code }),
+        body: JSON.stringify({
+          client_id: env.CLIENT_ID,
+          client_secret: env.CLIENT_SECRET,
+          code,
+        }),
       }
-    ).then((res) => res.json());
+    );
 
-    const loginResponse = decapCMSLoginScript(response.access_token);
+    const data = await response.json() as {
+      access_token?: string;
+      error?: string;
+    };
 
-    return new Response(loginResponse, {
+    if (!data.access_token) {
+      console.error('GitHub OAuth error:', data.error ?? 'No access token');
+      return new Response('GitHub OAuth authentication failed', {
+        status: 401,
+      });
+    }
+
+    return new Response(decapCMSLoginScript(data.access_token), {
       status: 201,
       headers: {
         'Content-Type': 'text/html;charset=UTF-8',
@@ -51,15 +71,14 @@ async function fetchAccessToken(requestParams: URLSearchParams) {
     });
   } catch (err) {
     console.error(err);
-    return new Response(err.message, {
-      status: 500,
-    });
+    return new Response('OAuth server error', { status: 500 });
   }
 }
 
-function redirectToAuthFlow() {
-  return Response.redirect(
-    `https://github.com/login/oauth/authorize?client_id=${client_id}&scope=repo,user`,
-    302
-  );
+function redirectToAuthFlow(env: Env): Response {
+  const url = new URL('https://github.com/login/oauth/authorize');
+  url.searchParams.set('client_id', env.CLIENT_ID);
+  url.searchParams.set('scope', 'repo,user');
+
+  return Response.redirect(url.toString(), 302);
 }

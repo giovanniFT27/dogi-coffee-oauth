@@ -1,4 +1,5 @@
-name = "dogi-coffee-oauth"
+# wrangler.toml
+name = 'dogi-coffee-oauth'
 main = "index.ts"
 
 compatibility_date = "2023-11-11"
